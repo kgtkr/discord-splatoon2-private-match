@@ -25,6 +25,27 @@ const bravoRoleName = "ブラボー";
 const gmRoleName = "GM";
 const rankRoleNames = ["C", "B", "A", "S", "S+", "X"];
 
+function rankToNumber(rank: string | undefined) {
+  switch (rank) {
+    case "C": return 1;
+    case "B": return 2;
+    case "A": return 3;
+    case "S": return 4;
+    case "S+": return 5;
+    case "X": return 6;
+  }
+  return 4;
+}
+
+function shuffle<T>(array: T[]) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const r = Math.floor(Math.random() * (i + 1));
+    const tmp = array[i];
+    array[i] = array[r];
+    array[r] = tmp;
+  }
+  return array;
+}
 
 (async () => {
   const config: Config = JSON.parse(await fs.readFile(".env.json", { encoding: "utf-8" }));
@@ -45,7 +66,7 @@ const rankRoleNames = ["C", "B", "A", "S", "S+", "X"];
         if (msg.member.id === gm.id) {
           if (msg.content === "\\開始") {
             if (match === null) {
-
+              const users = shuffle(Array.from(members)).slice(0, Math.min(members.size, 8));
             } else {
               msg.reply("既に開始しています。");
             }
