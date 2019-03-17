@@ -12,16 +12,16 @@ interface Match {
   bravoTextChannelID: string
   alphaVoiceChannelID: string,
   bravoVoiceChannelID: string,
-  alphaMember: Set<string>,
-  bravoMember: Set<string>,
+  alphaMembers: Set<string>,
+  bravoMembers: Set<string>,
 }
 
 const guildName = "水死体トゥーン";
 const mainTextChannelName = "プラベ";
 const alphaTextChannelName = "アルファ";
 const bravoTextChannelName = "ブラボー";
-const alphaTextRoleName = "アルファ";
-const bravoTextRoleName = "ブラボー";
+const alphaRoleName = "アルファ";
+const bravoRoleName = "ブラボー";
 const gmRoleName = "GM";
 const rankRoleNames = ["C", "B", "A", "S", "S+", "X"];
 
