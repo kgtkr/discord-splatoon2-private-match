@@ -6,20 +6,24 @@ interface Config {
 }
 
 interface Match {
-  alphaRoleID: string,
-  bravoRoleID: string,
-  alphaTextChannelID: string,
-  bravoTextChannelID: string
-  alphaVoiceChannelID: string,
-  bravoVoiceChannelID: string,
-  alphaMembers: Set<string>,
-  bravoMembers: Set<string>,
+  createdAt: Date,
+  alphaRole: Discord.Role,
+  bravoRole: Discord.Role,
+  alphaTextChannel: Discord.TextChannel,
+  bravoTextChannel: Discord.TextChannel
+  alphaVoiceChannel: Discord.VoiceChannel,
+  bravoVoiceChannel: Discord.VoiceChannel,
+  alphaMembers: Discord.GuildMember[],
+  bravoMembers: Discord.GuildMember[],
 }
 
 const guildName = "水死体トゥーン";
 const mainTextChannelName = "プラベ";
+const archiveCategoryName = "プラベアーカイブ";
 const alphaTextChannelName = "アルファ";
 const bravoTextChannelName = "ブラボー";
+const alphaVoiceChannelName = "アルファ";
+const bravoVoiceChannelName = "ブラボー";
 const alphaRoleName = "アルファ";
 const bravoRoleName = "ブラボー";
 const gmRoleName = "GM";
@@ -57,45 +61,116 @@ function shuffle<T>(array: T[]) {
     const gmRole = unwrap(guild.roles.array().find(x => x.name === gmRoleName));
     const gm = unwrap(gmRole.members.array()[0]);
     const rankRoles = rankRoleNames.map(name => unwrap(guild.roles.array().find(x => x.name === name)));
-    const mainTextChannel = unwrap(guild.channels.array().find(x => x.name === mainTextChannelName));
-    const members = new Set<string>();
+    const mainTextChannel = unwrap(guild.channels.array().find(x => x.name === mainTextChannelName && x instanceof Discord.TextChannel)) as Discord.TextChannel;
+    const category = mainTextChannel.parent;
+    const archiveCategory = unwrap(guild.channels.array().find(x => x.name === archiveCategoryName && x instanceof Discord.CategoryChannel));
+    const members = new Map<string, Discord.GuildMember>();
     let match: Match | null = null;
 
-    client.on('message', msg => {
+    client.on('message', async msg => {
       if (msg.channel.id === mainTextChannel.id) {
         if (msg.member.id === gm.id) {
           if (msg.content === "\\開始") {
             if (match === null) {
-              const users = shuffle(Array.from(members)).slice(0, Math.min(members.size, 8));
+              const createdAt = new Date();
+              const users = shuffle(Array.from(members.values()).slice(0, Math.min(members.size, 8)));
+              const alphaMembers: Discord.GuildMember[] = [];
+              const bravoMembers: Discord.GuildMember[] = [];
+              for (let i = 0; i < users.length; i++) {
+                if (i % 2 === 0) {
+                  alphaMembers.push(users[i]);
+                } else {
+                  bravoMembers.push(users[i]);
+                }
+              }
+              const alphaRole = await guild.createRole({ name: alphaRoleName, color: "red" });
+              const bravoRole = await guild.createRole({ name: bravoRoleName, color: "blue" });
+
+              const alphaTextChannel = await guild.createChannel(alphaTextChannelName, "text") as Discord.TextChannel;
+              await alphaTextChannel.setParent(category);
+              await alphaTextChannel.overwritePermissions("@everyone", { READ_MESSAGES: false });
+              await alphaTextChannel.overwritePermissions(alphaRole, { READ_MESSAGES: true });
+
+              const bravoTextChannel = await guild.createChannel(bravoTextChannelName, "text") as Discord.TextChannel;
+              await bravoTextChannel.setParent(category);
+              await bravoTextChannel.overwritePermissions("@everyone", { READ_MESSAGES: false });
+              await bravoTextChannel.overwritePermissions(bravoRole, { READ_MESSAGES: true });
+
+              const alphaVoiceChannel = await guild.createChannel(alphaVoiceChannelName, "voice") as Discord.VoiceChannel;
+              await alphaVoiceChannel.setParent(category);
+              await alphaVoiceChannel.overwritePermissions("@everyone", { CONNECT: false });
+              await alphaVoiceChannel.overwritePermissions(alphaRole, { CONNECT: true });
+
+              const bravoVoiceChannel = await guild.createChannel(bravoVoiceChannelName, "voice") as Discord.VoiceChannel;
+              await bravoVoiceChannel.setParent(category);
+              await bravoVoiceChannel.overwritePermissions("@everyone", { CONNECT: false });
+              await bravoVoiceChannel.overwritePermissions(bravoRole, { CONNECT: true });
+
+              for (let x of alphaMembers) {
+                await x.addRole(alphaRole);
+              }
+
+              for (let x of bravoMembers) {
+                await x.addRole(bravoRole);
+              }
+
+              match = {
+                createdAt,
+                alphaRole,
+                bravoRole,
+                alphaTextChannel,
+                bravoTextChannel,
+                alphaVoiceChannel,
+                bravoVoiceChannel,
+                alphaMembers,
+                bravoMembers
+              };
+
+              await mainTextChannel.send("アルファチーム\n" + Array.from(alphaMembers).map(x => `<@${x}>`).join("\n"));
+              await mainTextChannel.send("ブラボーチーム\n" + Array.from(bravoMembers).map(x => `<@${x}>`).join("\n"));
             } else {
-              msg.reply("既に開始しています。");
+              await msg.reply("既に開始しています。");
             }
           } else if (msg.content === "\\終了") {
             if (match !== null) {
+              await match.alphaVoiceChannel.delete();
+              await match.bravoVoiceChannel.delete();
 
+              await match.alphaTextChannel.setParent(archiveCategory);
+              await match.alphaTextChannel.setName(match.createdAt.toISOString() + " " + alphaTextChannelName);
+              await match.alphaTextChannel.permissionOverwrites.get("@everyone")!.delete();
+
+              await match.bravoTextChannel.setParent(archiveCategory);
+              await match.bravoTextChannel.setName(match.createdAt.toISOString() + " " + bravoTextChannelName);
+              await match.bravoTextChannel.permissionOverwrites.get("@everyone")!.delete();
+
+              await match.alphaRole.delete();
+              await match.bravoRole.delete();
+
+              match = null;
             } else {
-              msg.reply("開始されていません。");
+              await msg.reply("開始されていません。");
             }
           }
         }
 
         if (msg.content === "\\参加") {
           if (!members.has(msg.member.id)) {
-            members.add(msg.member.id);
+            members.set(msg.member.id, msg.member);
             if (msg.member.roles.array().find(role => rankRoles.find(x => x.id === role.id) !== undefined) !== undefined) {
-              msg.reply("追加しました。");
+              await msg.reply("追加しました。");
             } else {
-              msg.reply("追加しました。ウデマエが設定されていません。開始までに設定されない場合はSとして扱われます。")
+              await msg.reply("追加しました。ウデマエが設定されていません。開始までに設定されない場合はSとして扱われます。")
             }
           } else {
-            msg.reply("既に追加しています。");
+            await msg.reply("既に追加しています。");
           }
         } else if (msg.content === "\\削除") {
           if (members.has(msg.member.id)) {
             members.delete(msg.member.id);
-            msg.reply("削除しました。");
+            await msg.reply("削除しました。");
           } else {
-            msg.reply("存在しません。");
+            await msg.reply("存在しません。");
           }
         }
       }
